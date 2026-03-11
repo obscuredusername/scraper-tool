@@ -1,0 +1,23 @@
+# Python
+backend/venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node / React
+frontend/node_modules/
+node_modules/
+frontend/dist/
+frontend/build/
+.eslintcache
+
+# Project specific
+backend/static/screenshots/*.png
+backend/output/
+/output/
+
+# Secrets / Config (Crucial!)
+.env*
+.emv*
+*.local
