@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional, List
 
+from scrapers.nationwide.models import NationwideResult
 from bs4 import BeautifulSoup
 from playwright.async_api import Page, TimeoutError as PWTimeout, async_playwright
 
@@ -457,6 +458,102 @@ class ScraperEngine:
         finally:
             await context.close()
         
+        return result
+
+    async def scrape_nationwide(self, postcode: str = "") -> NationwideResult:
+        postcode = postcode.strip().upper()
+        browser = await self._start_browser()
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36",
+            viewport={"width": 1440, "height": 900},
+        )
+        page = await context.new_page()
+
+        result = NationwideResult(
+            scraped_at=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            postcode=postcode,
+        )
+
+        try:
+            logger.info(f"Navigating to Nationwide HPI")
+            await page.goto("https://www.nationwide.co.uk/house-price-index", wait_until="commit", timeout=45_000)
+
+            # Dismiss cookie banner
+            try:
+                await page.wait_for_selector("#onetrust-accept-btn-handler", timeout=5000)
+                await page.click("#onetrust-accept-btn-handler")
+                await page.wait_for_timeout(1000)
+            except Exception:
+                pass
+
+            try:
+                await page.wait_for_load_state("networkidle", timeout=30_000)
+            except Exception:
+                pass
+
+            await page.wait_for_timeout(2000)
+
+            # Postcode lookup
+            if postcode:
+                try:
+                    await page.wait_for_selector("input[type='text'], input[placeholder*='postcode' i]", timeout=10_000)
+                    await page.fill("input[type='text'], input[placeholder*='postcode' i]", postcode)
+                    await page.wait_for_timeout(500)
+                    await page.click("button[type='submit'], input[type='submit'], button:has-text('Search')")
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=15_000)
+                    except Exception:
+                        pass
+                    await page.wait_for_timeout(2000)
+                except Exception as e:
+                    logger.warning(f"Postcode form failed: {e}")
+
+            html = await page.content()
+            soup = BeautifulSoup(html, "lxml")
+            full_text = soup.get_text(separator=" ")
+
+            # Parse avg price
+            price_match = re.search(r'£[\d,]+', full_text)
+            if price_match:
+                result.avg_price = price_match.group(0)
+
+            # Parse changes
+            changes = re.findall(r'[+\-]?\d+\.?\d*%', full_text)
+            if len(changes) >= 1:
+                result.monthly_change = changes[0]
+            if len(changes) >= 2:
+                result.annual_change = changes[1]
+
+            # Parse report date
+            date_match = re.search(
+                r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}',
+                full_text
+            )
+            if date_match:
+                result.report_date = date_match.group(0)
+
+            # Parse local price if postcode was used
+            if postcode:
+                prices = re.findall(r'£[\d,]+', full_text)
+                if len(prices) >= 2:
+                    result.local_avg_price = prices[-1]
+
+            if not result.avg_price:
+                result.error = "No price data found — check debug/nationwide_last.html"
+
+            # Screenshot
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"nationwide_{postcode or 'headline'}_{ts}.png"
+            filepath = self.output_dir / filename
+            await page.screenshot(path=str(filepath), full_page=True)
+            result.screenshot_path = f"/static/screenshots/{filename}"
+
+        except Exception as e:
+            logger.error(f"Nationwide scrape failed: {e}")
+            result.error = str(e)
+        finally:
+            await context.close()
+
         return result
 
     # ── Parkers Helpers ──────────────────────────────────────────────────────
