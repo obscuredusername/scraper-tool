@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import axios from 'axios'
-import { Calculator, MapPin, Loader2, Camera, ExternalLink, Settings2, Car } from 'lucide-react'
+import { Calculator, MapPin, Loader2, Camera, ExternalLink, Settings2, Car, Home } from 'lucide-react'
 
 function App() {
     const [activeTab, setActiveTab] = useState('taxman')
@@ -30,6 +30,18 @@ function App() {
     // Parkers Form State
     const [plate, setPlate] = useState('BD51SMM')
 
+    const [hpiData, setHpiData] = useState({
+        locationMode: 'optionRegion',   // 'optionRegion' | 'optionPostcode' | 'optionUk'
+        region: 'Greater London',
+        postcode: '',
+        property_value: 300000,
+        from_year: 2020,
+        from_quarter: 1,
+        to_year: 2025,
+        to_quarter: 1
+    })
+    const updateHpiData = (key, value) => setHpiData(prev => ({ ...prev, [key]: value }))
+
     const handleScrape = async (e) => {
         e.preventDefault()
         setLoading(true)
@@ -44,6 +56,18 @@ function App() {
                 endpoint = `/api/scrapers/counciltax?postcode=${postcode}`
             } else if (activeTab === 'parkers') {
                 endpoint = `/api/scrapers/parkers?plate=${plate}`
+            } else if (activeTab === 'nationwide') {
+                const params = new URLSearchParams({
+                    property_value: hpiData.property_value,
+                    from_year: hpiData.from_year,
+                    from_quarter: hpiData.from_quarter,
+                    to_year: hpiData.to_year,
+                    to_quarter: hpiData.to_quarter,
+                    ...(hpiData.locationMode === 'optionRegion' && { region: hpiData.region }),
+                    ...(hpiData.locationMode === 'optionPostcode' && { postcode: hpiData.postcode }),
+                    ...(hpiData.locationMode === 'optionUk' && { region: 'UK' }),
+                })
+                endpoint = `/api/scrapers/nationwide?${params.toString()}`
             }
 
             const response = await axios.get(endpoint)
@@ -84,6 +108,13 @@ function App() {
                 >
                     <Car size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} />
                     Parkers
+                </button>
+                <button
+                    className={`tab ${activeTab === 'nationwide' ? 'active' : ''}`}
+                    onClick={() => { setActiveTab('nationwide'); setResult(null); }}
+                >
+                    <Home size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} />
+                    Nationwide HPI
                 </button>
             </div>
 
@@ -237,6 +268,117 @@ function App() {
                         </div>
                     )}
 
+                    {activeTab === 'nationwide' && (
+                        <div className="form-grid">
+
+                            {/* Location mode radio buttons */}
+                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                <label>Tell us where the property is</label>
+                                <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
+                                    {[
+                                        { value: 'optionRegion', label: 'Region' },
+                                        { value: 'optionPostcode', label: 'Postcode' },
+                                        { value: 'optionUk', label: 'UK average' }
+                                    ].map(opt => (
+                                        <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
+                                            <input
+                                                type="radio"
+                                                name="locationMode"
+                                                value={opt.value}
+                                                checked={hpiData.locationMode === opt.value}
+                                                onChange={e => updateHpiData('locationMode', e.target.value)}
+                                            />
+                                            {opt.label}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Region dropdown - only shown when locationMode === 'optionRegion' */}
+                            {hpiData.locationMode === 'optionRegion' && (
+                                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                    <label>Region</label>
+                                    <select className="input-field" value={hpiData.region} onChange={e => updateHpiData('region', e.target.value)}>
+                                        <option>East Anglia</option>
+                                        <option>East Midlands</option>
+                                        <option>Greater London</option>
+                                        <option>North</option>
+                                        <option>North West</option>
+                                        <option>Northern Ireland</option>
+                                        <option>Outer Metropolitan</option>
+                                        <option>Outer South East</option>
+                                        <option>Scotland</option>
+                                        <option>South West</option>
+                                        <option>Wales</option>
+                                        <option>West Midlands</option>
+                                        <option>Yorkshire &amp; The Humber</option>
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Postcode input - only shown when locationMode === 'optionPostcode' */}
+                            {hpiData.locationMode === 'optionPostcode' && (
+                                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                    <label>Enter Postcode</label>
+                                    <input
+                                        type="text"
+                                        className="input-field"
+                                        value={hpiData.postcode}
+                                        onChange={e => updateHpiData('postcode', e.target.value.toUpperCase())}
+                                        placeholder="e.g. SW1A 1AA"
+                                        style={{ maxWidth: 160 }}
+                                    />
+                                </div>
+                            )}
+
+                            {/* UK average - just a note, no extra field needed */}
+                            {hpiData.locationMode === 'optionUk' && (
+                                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                    <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '8px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                                        Using UK national average price data
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Property value - always shown */}
+                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                <label>Property Value (£)</label>
+                                <input type="number" className="input-field" value={hpiData.property_value} onChange={e => updateHpiData('property_value', e.target.value)} />
+                            </div>
+
+                            {/* From date */}
+                            <div className="form-group">
+                                <label>From Year</label>
+                                <input type="number" className="input-field" value={hpiData.from_year} onChange={e => updateHpiData('from_year', parseInt(e.target.value))} />
+                            </div>
+                            <div className="form-group">
+                                <label>From Quarter</label>
+                                <select className="input-field" value={hpiData.from_quarter} onChange={e => updateHpiData('from_quarter', parseInt(e.target.value))}>
+                                    <option value={1}>Q1 (Jan–Mar)</option>
+                                    <option value={2}>Q2 (Apr–Jun)</option>
+                                    <option value={3}>Q3 (Jul–Sep)</option>
+                                    <option value={4}>Q4 (Oct–Dec)</option>
+                                </select>
+                            </div>
+
+                            {/* To date */}
+                            <div className="form-group">
+                                <label>To Year</label>
+                                <input type="number" className="input-field" value={hpiData.to_year} onChange={e => updateHpiData('to_year', parseInt(e.target.value))} />
+                            </div>
+                            <div className="form-group">
+                                <label>To Quarter</label>
+                                <select className="input-field" value={hpiData.to_quarter} onChange={e => updateHpiData('to_quarter', parseInt(e.target.value))}>
+                                    <option value={1}>Q1 (Jan–Mar)</option>
+                                    <option value={2}>Q2 (Apr–Jun)</option>
+                                    <option value={3}>Q3 (Jul–Sep)</option>
+                                    <option value={4}>Q4 (Oct–Dec)</option>
+                                </select>
+                            </div>
+
+                        </div>
+                    )}
+
                     <button className="submit-btn" disabled={loading}>
                         {loading ? (
                             <span className="loading-spinner"></span>
@@ -325,6 +467,36 @@ function App() {
                                             <td style={{ fontWeight: '600', color: '#58a6ff' }}>
                                                 {result.prices?.dealer_low} - {result.prices?.dealer_high}
                                             </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {activeTab === 'nationwide' && (
+                            <div>
+                                <div style={{ marginBottom: 20, padding: 15, background: 'rgba(255,255,255,0.05)', borderRadius: 10 }}>
+                                    <p style={{ color: '#8b949e', fontSize: '0.9rem' }}>{result.description}</p>
+                                </div>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Period</th>
+                                            <th>Estimated Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>{result.from_label}</td>
+                                            <td>{result.from_value}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>{result.to_label}</td>
+                                            <td style={{ color: '#58a6ff', fontWeight: 'bold' }}>{result.to_value}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Percentage Change</td>
+                                            <td style={{ color: '#9646ff', fontWeight: 'bold' }}>{result.percentage_change}</td>
                                         </tr>
                                     </tbody>
                                 </table>

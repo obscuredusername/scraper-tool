@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 from app.auth.router import router as auth_router
 from app.core.router import router as core_router
-from app.scrapers.service import run_tax_scraper, run_counciltax_scraper, run_parkers_scraper
+from app.scrapers.service import run_tax_scraper, run_counciltax_scraper, run_parkers_scraper, run_nationwide_scraper
 
 api_router = APIRouter()
 
@@ -58,3 +58,26 @@ async def get_car_valuation(plate: str):
     Get car valuation from Parkers by registration plate.
     """
     return await run_parkers_scraper(plate=plate)
+
+@api_router.get("/scrapers/nationwide", tags=["scrapers"])
+async def get_house_price_index(
+    region: str = "Greater London",
+    postcode: str = "",
+    property_value: int = 0,
+    from_year: int = 0,
+    from_quarter: int = 1,
+    to_year: int = 0,
+    to_quarter: int = 1
+):
+    """
+    Get Nationwide House Price Index valuation change for a property.
+    """
+    return await run_nationwide_scraper(
+        region=region,
+        postcode=postcode,
+        property_value=property_value,
+        from_year=from_year,
+        from_quarter=from_quarter,
+        to_year=to_year,
+        to_quarter=to_quarter
+    )

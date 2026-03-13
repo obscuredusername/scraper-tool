@@ -1,4 +1,7 @@
 from app.scrapers.base import ScraperEngine, TaxConfig
+from scrapers.nationwide.models import NationwideQuery
+from scrapers.nationwide.scraper import NationwideScraper
+import asyncio
 
 async def run_tax_scraper(
     salary: int, 
@@ -52,3 +55,34 @@ async def run_parkers_scraper(plate: str):
     async with ScraperEngine(headless=True) as engine:
         result = await engine.scrape_parkers(plate)
         return result.to_dict()
+
+async def run_nationwide_scraper(
+    region: str = "Greater London",
+    postcode: str = "",
+    property_value: int = 0,
+    from_year: int = 0,
+    from_quarter: int = 1,
+    to_year: int = 0,
+    to_quarter: int = 1,
+) -> dict:
+    """
+    Service function to bootstrap the Nationwide HPI scraping process.
+    """
+    query = NationwideQuery(
+        region=region,
+        postcode=postcode,
+        property_value=property_value,
+        from_year=from_year,
+        from_quarter=from_quarter,
+        to_year=to_year,
+        to_quarter=to_quarter,
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def _run_sync():
+        with NationwideScraper() as scraper:
+            return scraper.scrape(query)
+
+    result = await loop.run_in_executor(None, _run_sync)
+    return result.to_dict()

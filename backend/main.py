@@ -2,6 +2,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.urls import api_router
 import os
+import asyncio
+import sys
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 app = FastAPI(title="Scraper API")
 
